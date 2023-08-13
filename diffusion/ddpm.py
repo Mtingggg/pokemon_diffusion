@@ -1,12 +1,11 @@
 import numpy as np
+import matplotlib.pyplot as plt
+
 import torch
 import torch.nn.functional as F
 from torchvision import transforms
 
-from .utils import convert_list_to_shape
-
-def linear_beta_scheduler(beta_start, beta_end, timesteps, device):
-    return (beta_end - beta_start) * torch.linspace(0, 1, timesteps + 1, device=device) + beta_start
+from .utils import convert_list_to_shape, linear_beta_scheduler
 
 tensor2numpy = transforms.Compose([
      transforms.Lambda(lambda t: (t + 1) / 2),
@@ -33,6 +32,9 @@ class DDPM(torch.nn.Module):
             transforms.Lambda(lambda t: t.numpy().astype(np.uint8))
         ])
 
+    def add_noise(self, x, t):
+        noise = torch.randn_like(x, device=self.device)
+        return self.alphas_cumprod.sqrt()[t, None, None, None] * x + ((1 - self.alphas_cumprod).sqrt()[t, None, None, None]) * noise, noise
     
     def denoise(self, x, t, pred_noise):
         x_shape = x.shape
@@ -46,7 +48,7 @@ class DDPM(torch.nn.Module):
         return mean + noise
     
     @torch.no_grad()
-    def sample(self, model, n_sample, img_size, context_dim, timesteps, step_size):
+    def sample(self, model, n_sample, img_size, context_dim, timesteps, step_size, plot=False):
         # sample initial noise
         samples = torch.randn(n_sample, 3, img_size, img_size).to(self.device)
         sample_contexts = F.one_hot(torch.randint(0, (context_dim-1), (n_sample,)), context_dim).unsqueeze(1).float().to(self.device)
@@ -60,5 +62,21 @@ class DDPM(torch.nn.Module):
             if i%step_size==0:
                 for n in range(n_sample):
                     sample_steps[n].append(self.tensor2numpy(samples[n].detach().cpu()))
+            
+            res = np.array(sample_steps)
         
-        return np.array(sample_steps)
+        if plot:
+            fig, axes = plt.subplots(res.shape[0], res.shape[1], figsize=(24, 24))
+            axs = axes.flatten()
+            for i in range(len(res)):
+                for img_idx in range(len(res[i])):
+                    axs_idx = i*res.shape[1]+img_idx
+                    axs[axs_idx].clear()
+                    axs[axs_idx].imshow(res[i][img_idx])
+                    axs[axs_idx].set_xticks([])
+                    axs[axs_idx].set_yticks([])
+
+            plt.tight_layout()
+            plt.show()
+
+        return res
