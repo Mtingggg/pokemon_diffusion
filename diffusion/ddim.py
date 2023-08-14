@@ -36,7 +36,7 @@ class DDIM(DDPM):
         res = np.array(sample_steps)
 
         if plot:
-            fig, axes = plt.subplots(res.shape[0], res.shape[1], figsize=(24, 24))
+            fig, axes = plt.subplots(res.shape[0], res.shape[1], figsize=(len(sample_steps[0])*2,n_sample*2))
             axs = axes.flatten()
             for i in range(len(res)):
                 for img_idx in range(len(res[i])):
